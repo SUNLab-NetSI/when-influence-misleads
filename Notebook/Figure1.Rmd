@@ -1,0 +1,267 @@
+---
+title: "Figure1"
+output: html_document
+date: "2025-03-20"
+---
+
+```{r setup, include=FALSE}
+#| echo: FALSE
+#| warning: FALSE
+library(data.table)
+library(tidyverse)
+library(ggplot2)
+library(data.table)
+library(scales)  
+library(data.table)
+library(zoo)  # For interpolation
+
+
+```
+
+```{r}
+setwd("/Users/bijinjoseph/Documents/Research/when-influence-misleads")
+perf <- fread("data/traders.csv")
+
+```
+
+```{r}
+summ_users <- perf |> group_by(CID) |>
+  summarize(
+    ntrades = n(), 
+    ntrades_mirror = sum(parentCID != 0),
+    avg_perf = mean(perf),
+    avg_perf_mirror = mean(perf[parentCID != 0]),
+    avg_perf_nomirror = mean(perf[parentCID == 0])
+  )
+```
+
+```{r}
+selected_users <- summ_users |> filter(ntrades > 1) |> pull(CID)
+summ_users <- summ_users |> filter(CID %in% selected_users)
+```
+
+### Time series
+
+```{r}
+filtered_df_ <- fread('../data/fig1_d.csv')
+head(filtered_df_)
+```
+
+```{r}
+library(data.table)
+library(ggplot2)
+library(scales)
+library(zoo)
+library(patchwork)
+
+cids <- c(362721, 2775712)
+colors <- c("#EAA068", "#5BC0A4")  # Custom colors for Trader A and Trader B
+trader_labels <- c("Trader A", "Trader B")  # New labels for the legend
+
+# Convert 'T' to Date format
+filtered_df_[, T := as.Date(T)]  
+
+# Interpolate missing values in the 'in_degree' column
+filtered_df_[, in_degree := na.approx(in_degree, na.rm = FALSE), by = CID]
+
+# Define x-axis limits
+xlim_start <- as.Date("2013-04-15")
+xlim_end <- as.Date("2013-06-15")
+
+# Function to add custom x & y axis lines with BLACK labels
+custom_theme <- theme_minimal(base_size = 27) +
+  theme(axis.line = element_line(color = "black", size = 1.2),  # Add x and y axis lines
+        axis.ticks = element_line(size = 1.2),
+        axis.text.x = element_text(size = 27, color = "black"),  # Make x-axis text black
+        axis.text.y = element_text(size = 27, angle = 40, color = "black"),  # Make y-axis text black
+        axis.title.x = element_text(size = 27, color = "black"),  # Make x-axis label black
+        axis.title.y = element_text(size = 27, color = "black"),  # Make y-axis label black
+        legend.position = "top",
+        legend.text = element_text(size = 27, color = "black"),  # Make legend text black
+        legend.title = element_text(size = 27, color = "black"),  # Make legend title black
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())
+
+# Plot performance_30
+p1 <- ggplot(filtered_df_[CID %in% cids], aes(x = T, group = as.factor(CID))) +
+  geom_line(aes(y = performance_30 * 10000, color = factor(CID)), size = 1.2) +
+  scale_color_manual(values = colors, labels = trader_labels, name = NULL) +  # Remove legend title
+  labs(y = expression(R[it] ~ "(bps)"), x = "Time", color = NULL) +                      # Also ensure no title here
+  scale_x_date(
+    breaks = as.Date(c("2013-04-20", "2013-05-15", "2013-06-10")),
+    labels = c("Apr 2013", "May 2013", "Jun 2013"),
+    limits = c(xlim_start, xlim_end)
+  ) +
+  scale_y_continuous(breaks = c(30, 0, -30, -60, -90)) +
+  custom_theme +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "black", size = 1.5)
+
+# Plot in_degree
+p2 <- ggplot(filtered_df_[CID %in% cids], aes(x = T, group = as.factor(CID))) +
+  geom_line(aes(y = in_degree, color = factor(CID)), size = 1.2) +
+  scale_color_manual(values = colors, labels = trader_labels) +  # Assign new labels (Trader A, Trader B)
+  labs(y = expression(P[it]), x = "Date", color = "Trader") +
+  scale_x_date(
+  breaks = as.Date(c("2013-04-20", "2013-05-15", "2013-06-10")),
+  labels = c("Apr 2013", "May 2013", "Jun 2013"),
+  limits = c(xlim_start, xlim_end)
+)+  # **Add X-axis limits**
+  custom_theme +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "black", size = 1.5) +
+  theme(legend.position = "none")  # Remove legend from second plot
+
+# Arrange the plots vertically
+pa <- p1 / p2
+pa
+```
+
+### Correlation between performance and popularity
+
+```{r}
+library(data.table)
+library(ggplot2)
+library(scales)
+
+# Load dataset
+pearson_coeffs <- fread("../data/fig1_b.csv")
+
+# Rename the incorrectly named column
+setnames(pearson_coeffs, "0", "pearson_r")
+
+# Define CIDs and corresponding trader names/colors
+cids <- c(362721, 2775712)
+trader_labels <- c("Trader A", "Trader B")
+colors <- c("#EAA068", "#5BC0A4")  # Colors for each trader
+
+# Extract Pearson correlation for selected CIDs
+pearson_subset <- pearson_coeffs[CID %in% cids]
+pearson_subset[, `:=`(color = colors[match(CID, cids)], 
+                      trader_label = trader_labels[match(CID, cids)])]  # Assign colors & labels
+
+# Compute statistics
+average_pearson <- mean(pearson_coeffs$pearson_r, na.rm = TRUE)
+std_dev <- sd(pearson_coeffs$pearson_r, na.rm = TRUE)
+n <- sum(!is.na(pearson_coeffs$pearson_r))  # Count non-NA values
+sem <- std_dev / sqrt(n)
+
+# Create density plot (KDE) with renamed annotations
+pb <- ggplot(data = pearson_coeffs, aes(x = pearson_r)) +
+  geom_density(fill = "grey", color = "black", alpha = 0.6, linewidth = 1.5) +  # KDE plot
+  geom_vline(xintercept = average_pearson, color = "black", linetype = "dashed", linewidth = 2) +  # Vertical line at mean
+  labs(x = expression("Correlation between " * R[i] * "&" * P[i]), y = "Density") +  # Correct LaTeX-style label
+  theme_minimal(base_size = 27) +  # Set font size
+  scale_x_continuous(limits = c(-1, 1), breaks = pretty_breaks(n = 3)) +  # X-axis limits and labels
+  scale_y_continuous(limits = c(0, 1.2),breaks = pretty_breaks(n = 3), expand = c(0, 0)) +  # Reduce number of Y-axis labels
+  theme(axis.text = element_text(size = 27, color = "black"),
+        axis.title = element_text(size = 27, color = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.ticks = element_line(color = "black", linewidth = 1.2),
+        axis.line = element_line(color = "black", size = 1.2)) +  # Add x and y axis lines
+  # Add arrows pointing to the x-axis
+  geom_segment(data = pearson_subset, aes(x = pearson_r, xend = pearson_r, 
+                                          y = 0.2, yend = 0, color = factor(trader_label)), 
+               linewidth = 1.5, arrow = arrow(type = "closed", length = unit(0.2, "inches"))) +
+  # Add text annotations above the arrows with new trader labels
+  geom_text(data = pearson_subset, aes(x = pearson_r-0.1, y = 0.23, label = trader_label, color = factor(trader_label)), 
+            size = 8, fontface = "bold") +
+  # **Remove legend for Trader A and Trader B**
+  scale_color_manual(values = colors, guide = "none")  
+
+# Print computed statistics
+cat("Standard Deviation:", std_dev, "\n")
+cat("Sqrt of Sample Size:", sqrt(n), "\n")
+cat("Standard Error:", sem, "\n")
+
+# Display the plot
+print(pb)
+pb
+```
+
+```{r}
+
+summ_users <- fread('../data/fig1_c.csv')
+```
+
+### Distribution of performance
+
+```{r}
+
+signed_sqrt_trans <- trans_new(
+  name = "signed_sqrt",
+  transform = function(x) sign(x) * sqrt(abs(x)),  # Apply signed sqrt transformation
+  inverse = function(x) sign(x) * (x^2)  # Inverse function
+)
+
+# Compute performance means
+all_orders_performance <- mean(summ_users$avg_perf, na.rm = TRUE) 
+mirror_orders_performance <- mean(summ_users$avg_perf[summ_users$ntrades_mirror > 0], na.rm = TRUE)
+no_mirror_orders_performance <- mean(summ_users$avg_perf[summ_users$ntrades_mirror == 0], na.rm = TRUE)
+
+# Create dataset for plotting
+plot_data <- data.table(
+  avg_perf = c(summ_users$avg_perf, summ_users$avg_perf[summ_users$ntrades_mirror > 0], summ_users$avg_perf[summ_users$ntrades_mirror == 0]),
+  group = rep(c("All traders", "Traders mirroring", "Traders not mirroring"), 
+              times = c(length(summ_users$avg_perf), 
+                        sum(summ_users$ntrades_mirror > 0), 
+                        sum(summ_users$ntrades_mirror == 0)))
+)
+
+# Mean values for vertical lines
+mean_values <- data.table(
+  avg_perf = c(all_orders_performance, mirror_orders_performance, no_mirror_orders_performance),
+  group = c("All traders", "Traders mirroring", "Traders not mirroring"),
+  color = c("black", "#8E1616", "#205781") # Matching colors
+)
+setDT(summ_users)
+# Plot KDE with signed sqrt scaling & vertical mean lines
+pc <- ggplot(plot_data, aes(x = avg_perf, color = group)) +  # removed `fill = group`
+  geom_density(alpha = 0, linewidth = 1.2) +  # set alpha = 0 to ensure no fill
+  geom_vline(data = mean_values, aes(xintercept = avg_perf, color = group), linetype = "dashed", linewidth = 1) +
+  labs(
+    x = expression(paste(rho[i, t], "  (bps)")),
+    y = "Density",
+    title = " "
+  ) +
+  scale_x_continuous(
+    trans = signed_sqrt_trans, 
+    limits = c(-500, 500),
+    breaks = c(-500, -100, 0, 100, 500),
+    labels = c("-500", "-100", "0", "-100", "500")
+  ) + 
+  scale_y_continuous(
+    trans = "sqrt",
+    limits = c(0, 0.2),
+    breaks = c(0, 0.05, 0.2),
+    labels = scales::label_number(accuracy = 0.01),
+    expand = c(0, 0)
+  ) +
+  scale_color_manual(name = NULL, values = c("black", "#8E1616", "#205781")) +
+  theme_minimal(base_size = 27) +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(color = "black", linewidth = 1.5),
+    axis.ticks = element_line(color = "black", linewidth = 1.2),
+    axis.text = element_text(size = 27, colour = "black"),
+    axis.title = element_text(size = 27),
+    legend.text = element_text(size = 24),
+    legend.position = c(1.00, 1.20),
+    legend.justification = c(1, 1)
+  ) +
+  annotate("text", x = summ_users[CID == 362721]$avg_perf, y = 0.01, label = "Trader A", color = "#EAA068", size = 7, fontface = "bold") +
+  annotate("segment", x = summ_users[CID == 362721]$avg_perf, xend = summ_users[CID == 362721]$avg_perf, y = 0.01, yend = 0, 
+           color = "#EAA068", linewidth = 1.5, 
+           arrow = arrow(type = "closed", length = unit(0.2, "inches"))) +
+  annotate("text", x = summ_users[CID == 2775712]$avg_perf, y = 0.01, label = "Trader B", color = "#5BC0A4", size = 7, fontface = "bold") +
+  annotate("segment", x = summ_users[CID == 2775712]$avg_perf, xend = summ_users[CID == 2775712]$avg_perf, y = 0.01, yend = 0, 
+           color = "#5BC0A4", linewidth = 1.5, 
+           arrow = arrow(type = "closed", length = unit(0.2, "inches")))
+
+pc
+```
+
+```{r}
+# Save the combined plots as a PDF
+ggsave("../images/combined_plots.pdf", plot = pa / pb / pc, width = 12, height = 19, dpi = 300)
+```
