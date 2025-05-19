@@ -1,17 +1,3 @@
-# Data and Code Repository
-
-This repository supports the paper:
-
-**_When Influence Misleads: Signal Mismatch and Cognitive Constraints in Trading Networks_**  
-by Bijin Joseph *et al.*
-
-## Contents
-
-- Each script (`Figure?.ipynb` or `Figure?.Rmd`) contains the code used to generate the corresponding figure in the main paper.  
-- The `Data/` folder contains the CSV files required to reproduce the figures.  
-- Refer to the Supplementary Material for a complete list of Python and R libraries used in the analysis.
-
----
 
 # When Influence Misleads: Signal Mismatch and Cognitive Constraints in Trading Networks
 
@@ -29,6 +15,14 @@ by Bijin Joseph *et al.*
 <sup>5</sup> Media Lab, Massachusetts Institute of Technology, Cambridge, MA 02139  
 
 ---
+## Contents of the Repository
+
+- Each script (`Figure?.ipynb` or `Figure?.Rmd`) contains the code used to generate the corresponding figure in the main paper.  
+- The `Data/` folder contains the CSV files required to reproduce the figures.  
+- Refer to the Supplementary Material for a complete list of Python and R libraries used in the analysis.
+
+---
+
 
 ## Abstract
 
