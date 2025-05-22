@@ -1,6 +1,5 @@
 
-# When Influence Misleads: Signal Mismatch and Cognitive Constraints in Trading Networks
-
+# When Influence Misleads: Informational and Strategic Limits of Social Learning in Trading Networks
 ## Authors
 
 - **Bijin Joseph**<sup>1, 4</sup>  
